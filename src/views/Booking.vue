@@ -38,8 +38,13 @@
         </el-select>
       </el-form-item>
 
-      <el-form-item label="Dịch vụ" prop="service">
-        <el-select v-model="bookingForm.service" placeholder="Chọn dịch vụ">
+      <el-form-item label="Dịch vụ" prop="services">
+        <el-select 
+          v-model="bookingForm.services" 
+          placeholder="Chọn dịch vụ"
+          multiple
+          collapse-tags
+        >
           <el-option
             v-for="service in services"
             :key="service.id"
@@ -68,6 +73,10 @@
             </span>
           </el-option>
         </el-select>
+      </el-form-item>
+
+      <el-form-item label="Tổng tiền">
+        <span class="total-price">{{ formatPrice(totalPrice) }}</span>
       </el-form-item>
 
       <el-form-item label="Ghi chú" prop="notes">
@@ -102,7 +111,7 @@ const bookingForm = ref({
   date: '',
   time: '',
   staffId: '',
-  service: '',
+  services: [],
   notes: '',
   status: 'pending'
 })
@@ -124,18 +133,43 @@ const rules = {
   staffId: [
     { required: true, message: 'Vui lòng chọn thợ cắt', trigger: 'change' }
   ],
-  service: [
-    { required: true, message: 'Vui lòng chọn dịch vụ', trigger: 'change' }
+  services: [
+    { required: true, message: 'Vui lòng chọn ít nhất một dịch vụ', trigger: 'change' }
   ]
 }
 
+// Tính tổng tiền
+const totalPrice = computed(() => {
+  if (!bookingForm.value.services) return 0
+  return bookingForm.value.services.reduce((total, serviceId) => {
+    const service = services.value.find(s => s.id === serviceId)
+    return total + (service ? service.price : 0)
+  }, 0)
+})
+
 // Lấy danh sách thợ đang làm việc và có chuyên môn phù hợp
 const availableStaff = computed(() => {
-  if (!bookingForm.value.service) return []
+  if (!bookingForm.value.services || !bookingForm.value.date || !bookingForm.value.time) return []
+  
+  // Lấy danh sách lịch hẹn hiện tại
+  const bookings = JSON.parse(localStorage.getItem('bookings') || '[]')
+  
+  // Lọc thợ đã có lịch vào thời điểm này
+  const busyStaffIds = bookings
+    .filter(booking => 
+      booking.date === bookingForm.value.date && 
+      booking.time === bookingForm.value.time &&
+      booking.status !== 'cancelled'
+    )
+    .map(booking => booking.staffId)
   
   return staff.value.filter(s => 
     s.status === 'active' && 
-    s.specialties.includes(bookingForm.value.service)
+    s.specialties && 
+    !busyStaffIds.includes(s.id) &&
+    bookingForm.value.services.every(serviceId => 
+      s.specialties.includes(serviceId)
+    )
   )
 })
 
@@ -155,6 +189,7 @@ const disabledDate = (time) => {
 
 // Lấy danh sách chuyên môn của thợ
 const getStaffSpecialties = (staff) => {
+  if (!staff.specialties) return ''
   return staff.specialties
     .map(id => {
       const service = services.value.find(s => s.id === id)
@@ -188,7 +223,9 @@ const submitForm = async () => {
       
       // Lấy thông tin thợ và dịch vụ được chọn
       const selectedStaff = staff.value.find(s => s.id === bookingForm.value.staffId)
-      const selectedService = services.value.find(s => s.id === bookingForm.value.service)
+      const selectedServices = bookingForm.value.services.map(serviceId => 
+        services.value.find(s => s.id === serviceId)
+      )
       
       // Tạo đối tượng lịch hẹn mới
       const newBooking = {
@@ -196,8 +233,13 @@ const submitForm = async () => {
         ...bookingForm.value,
         staffName: selectedStaff.name,
         staffSpecialties: getStaffSpecialties(selectedStaff),
-        serviceName: selectedService.name,
-        servicePrice: selectedService.price
+        services: selectedServices.map(s => ({
+          id: s.id,
+          name: s.name,
+          price: s.price
+        })),
+        totalPrice: totalPrice.value,
+        status: 'pending'
       }
       
       // Lấy danh sách lịch hẹn hiện tại
@@ -303,6 +345,12 @@ const resetForm = () => {
 .submit-button {
   padding: 12px 40px;
   font-size: 1.1rem;
+}
+
+.total-price {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #409EFF;
 }
 
 @media (max-width: 768px) {

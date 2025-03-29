@@ -10,6 +10,7 @@
           <router-link to="/booking">Đặt lịch</router-link>
           <router-link to="/bookings">Lịch hẹn</router-link>
           <router-link to="/products">Sản phẩm</router-link>
+          <router-link to="/orders">Đơn hàng</router-link>
           <router-link to="/cart">Giỏ hàng</router-link>
           <template v-if="user.username">
             <a href="#" @click.prevent="handleLogout">Đăng xuất</a>

@@ -35,6 +35,10 @@
           <el-icon><User /></el-icon>
           <span>Quản lý thợ</span>
         </el-menu-item>
+        <el-menu-item index="/admin/storage">
+          <el-icon><Box /></el-icon>
+          <span>Quản lý dữ liệu</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -81,7 +85,8 @@ import {
   ShoppingCart,
   User,
   Calendar,
-  Service
+  Service,
+  Box
 } from '@element-plus/icons-vue'
 
 const router = useRouter()

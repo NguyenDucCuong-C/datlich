@@ -1,126 +1,142 @@
 <template>
-  <div class="orders">
-    <div class="header">
+  <div class="admin-orders">
+    <div class="page-header">
       <h2>Quản lý đơn hàng</h2>
-      <div class="stats">
-        <el-card class="stat-card">
-          <template #header>
-            <div class="stat-header">
-              <span>Tổng doanh thu</span>
-              <el-icon><Money /></el-icon>
-            </div>
-          </template>
-          <div class="stat-value">{{ formatPrice(totalRevenue) }}</div>
-        </el-card>
-        <el-card class="stat-card">
-          <template #header>
-            <div class="stat-header">
-              <span>Đơn hàng mới</span>
-              <el-icon><ShoppingCart /></el-icon>
-            </div>
-          </template>
-          <div class="stat-value">{{ newOrders }}</div>
-        </el-card>
-        <el-card class="stat-card">
-          <template #header>
-            <div class="stat-header">
-              <span>Đơn hàng hoàn thành</span>
-              <el-icon><CircleCheck /></el-icon>
-            </div>
-          </template>
-          <div class="stat-value">{{ completedOrders }}</div>
-        </el-card>
+      <div class="header-actions">
+        <el-select v-model="statusFilter" placeholder="Lọc theo trạng thái" style="width: 150px">
+          <el-option label="Tất cả" value="all" />
+          <el-option label="Chờ xác nhận" value="pending" />
+          <el-option label="Đã xác nhận" value="confirmed" />
+          <el-option label="Đã thanh toán" value="paid" />
+          <el-option label="Đã hủy" value="cancelled" />
+        </el-select>
       </div>
     </div>
 
-    <el-table :data="orders" style="width: 100%" v-loading="loading">
-      <el-table-column prop="id" label="Mã đơn hàng" width="120" />
-      <el-table-column prop="customerName" label="Khách hàng" width="150" />
-      <el-table-column prop="phone" label="Số điện thoại" width="120" />
-      <el-table-column prop="address" label="Địa chỉ" />
-      <el-table-column prop="total" label="Tổng tiền" width="150">
-        <template #default="{ row }">
-          {{ formatPrice(row.total) }}
+    <el-table :data="filteredOrders" style="width: 100%" v-loading="loading">
+      <el-table-column prop="id" label="Mã đơn" width="100"></el-table-column>
+      
+      <el-table-column prop="customerName" label="Khách hàng" width="150"></el-table-column>
+      
+      <el-table-column prop="phone" label="Số điện thoại" width="120"></el-table-column>
+      
+      <el-table-column prop="address" label="Địa chỉ"></el-table-column>
+      
+      <el-table-column label="Sản phẩm">
+        <template #default="scope">
+          <div v-for="item in scope.row.items" :key="item.id" class="order-item">
+            <span>{{ item.name }}</span>
+            <span>x{{ item.quantity }}</span>
+            <span>{{ formatPrice(item.price) }}</span>
+          </div>
         </template>
       </el-table-column>
+      
+      <el-table-column prop="totalAmount" label="Tổng tiền" width="150">
+        <template #default="scope">
+          {{ formatPrice(scope.row.totalAmount) }}
+        </template>
+      </el-table-column>
+      
       <el-table-column prop="status" label="Trạng thái" width="120">
-        <template #default="{ row }">
-          <el-tag :type="getStatusType(row.status)">
-            {{ getStatusText(row.status) }}
+        <template #default="scope">
+          <el-tag :type="getStatusType(scope.row.status)">
+            {{ getStatusText(scope.row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="createdAt" label="Ngày đặt" width="180">
-        <template #default="{ row }">
-          {{ formatDate(row.createdAt) }}
-        </template>
-      </el-table-column>
-      <el-table-column label="Thao tác" width="200">
-        <template #default="{ row }">
-          <el-button-group>
-            <el-button type="primary" size="small" @click="viewOrder(row)">
-              Chi tiết
-            </el-button>
-            <el-button 
-              v-if="row.status === 'pending'"
-              type="success" 
-              size="small" 
-              @click="updateStatus(row, 'completed')"
-            >
-              Hoàn thành
-            </el-button>
-            <el-button 
-              v-if="row.status === 'pending'"
-              type="danger" 
-              size="small" 
-              @click="updateStatus(row, 'cancelled')"
-            >
-              Hủy
-            </el-button>
-          </el-button-group>
+      
+      <el-table-column label="Thao tác" width="250">
+        <template #default="scope">
+          <el-button 
+            v-if="scope.row.status === 'pending'"
+            type="success" 
+            size="small" 
+            @click="handleApprove(scope.row)"
+          >
+            Xác nhận
+          </el-button>
+          <el-button 
+            v-if="scope.row.status === 'confirmed'"
+            type="primary" 
+            size="small" 
+            @click="handleMarkAsPaid(scope.row)"
+          >
+            Đã thanh toán
+          </el-button>
+          <el-button 
+            v-if="scope.row.status === 'pending'"
+            type="danger" 
+            size="small" 
+            @click="handleCancel(scope.row)"
+          >
+            Hủy
+          </el-button>
+          <el-button 
+            type="info" 
+            size="small" 
+            @click="showDetails(scope.row)"
+          >
+            Chi tiết
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <!-- Dialog chi tiết đơn hàng -->
     <el-dialog
-      v-model="dialogVisible"
+      v-model="detailsDialogVisible"
       title="Chi tiết đơn hàng"
-      width="50%"
+      width="600px"
     >
-      <div v-if="selectedOrder">
-        <div class="order-details">
-          <p><strong>Mã đơn hàng:</strong> {{ selectedOrder.id }}</p>
-          <p><strong>Khách hàng:</strong> {{ selectedOrder.customerName }}</p>
-          <p><strong>Số điện thoại:</strong> {{ selectedOrder.phone }}</p>
-          <p><strong>Địa chỉ:</strong> {{ selectedOrder.address }}</p>
-          <p><strong>Ngày đặt:</strong> {{ formatDate(selectedOrder.createdAt) }}</p>
-          <p><strong>Trạng thái:</strong> 
-            <el-tag :type="getStatusType(selectedOrder.status)">
-              {{ getStatusText(selectedOrder.status) }}
-            </el-tag>
-          </p>
+      <div v-if="selectedOrder" class="order-details">
+        <div class="detail-row">
+          <span class="label">Mã đơn:</span>
+          <span class="value">{{ selectedOrder.id }}</span>
         </div>
-
-        <el-table :data="selectedOrder.items" style="width: 100%">
-          <el-table-column prop="name" label="Sản phẩm" />
-          <el-table-column prop="price" label="Đơn giá" width="150">
-            <template #default="{ row }">
-              {{ formatPrice(row.price) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="quantity" label="Số lượng" width="100" />
-          <el-table-column label="Thành tiền" width="150">
-            <template #default="{ row }">
-              {{ formatPrice(row.price * row.quantity) }}
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <div class="order-total">
-          <p><strong>Tổng tiền:</strong> {{ formatPrice(selectedOrder.total) }}</p>
+        <div class="detail-row">
+          <span class="label">Khách hàng:</span>
+          <span class="value">{{ selectedOrder.customerName }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Số điện thoại:</span>
+          <span class="value">{{ selectedOrder.phone }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Địa chỉ:</span>
+          <span class="value">{{ selectedOrder.address }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Ngày đặt:</span>
+          <span class="value">{{ formatDate(selectedOrder.orderDate) }}</span>
+        </div>
+        <div class="products-list">
+          <div class="label">Sản phẩm:</div>
+          <div v-for="item in selectedOrder.items" :key="item.id" class="product-item">
+            <div class="product-info">
+              <img :src="item.image" class="product-image" />
+              <div class="product-details">
+                <div class="product-name">{{ item.name }}</div>
+                <div class="product-price">{{ formatPrice(item.price) }}</div>
+              </div>
+            </div>
+            <div class="product-quantity">x{{ item.quantity }}</div>
+          </div>
+        </div>
+        <div class="total-row">
+          <span class="label">Tổng tiền:</span>
+          <span class="value total">{{ formatPrice(selectedOrder.totalAmount) }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">Ghi chú:</span>
+          <span class="value">{{ selectedOrder.notes || 'Không có' }}</span>
         </div>
       </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="detailsDialogVisible = false">Đóng</el-button>
+        </span>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -128,40 +144,25 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Money, ShoppingCart, CircleCheck } from '@element-plus/icons-vue'
 
 const loading = ref(false)
 const orders = ref([])
-const dialogVisible = ref(false)
+const statusFilter = ref('all')
+const detailsDialogVisible = ref(false)
 const selectedOrder = ref(null)
 
-onMounted(() => {
-  loadOrders()
+// Lọc đơn hàng theo trạng thái
+const filteredOrders = computed(() => {
+  if (statusFilter.value === 'all') return orders.value
+  return orders.value.filter(order => order.status === statusFilter.value)
 })
 
-const loadOrders = () => {
-  loading.value = true
-  // Giả lập API call
-  setTimeout(() => {
-    orders.value = JSON.parse(localStorage.getItem('orders') || '[]')
-    loading.value = false
-  }, 500)
+// Format ngày tháng
+const formatDate = (date) => {
+  return new Date(date).toLocaleDateString('vi-VN')
 }
 
-const totalRevenue = computed(() => {
-  return orders.value.reduce((total, order) => {
-    return order.status === 'completed' ? total + order.total : total
-  }, 0)
-})
-
-const newOrders = computed(() => {
-  return orders.value.filter(order => order.status === 'pending').length
-})
-
-const completedOrders = computed(() => {
-  return orders.value.filter(order => order.status === 'completed').length
-})
-
+// Format giá tiền
 const formatPrice = (price) => {
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
@@ -169,105 +170,221 @@ const formatPrice = (price) => {
   }).format(price)
 }
 
-const formatDate = (date) => {
-  return new Date(date).toLocaleString('vi-VN')
-}
-
+// Lấy loại tag cho trạng thái
 const getStatusType = (status) => {
-  const types = {
-    pending: 'warning',
-    completed: 'success',
-    cancelled: 'danger'
+  switch (status) {
+    case 'pending': return 'warning'
+    case 'confirmed': return 'primary'
+    case 'paid': return 'success'
+    case 'cancelled': return 'danger'
+    default: return 'info'
   }
-  return types[status] || 'info'
 }
 
+// Lấy text cho trạng thái
 const getStatusText = (status) => {
-  const texts = {
-    pending: 'Chờ xử lý',
-    completed: 'Hoàn thành',
-    cancelled: 'Đã hủy'
+  switch (status) {
+    case 'pending': return 'Chờ xác nhận'
+    case 'confirmed': return 'Đã xác nhận'
+    case 'paid': return 'Đã thanh toán'
+    case 'cancelled': return 'Đã hủy'
+    default: return status
   }
-  return texts[status] || status
 }
 
-const viewOrder = (order) => {
+// Hiển thị dialog chi tiết
+const showDetails = (order) => {
   selectedOrder.value = order
-  dialogVisible.value = true
+  detailsDialogVisible.value = true
 }
 
-const updateStatus = async (order, newStatus) => {
-  try {
-    await ElMessageBox.confirm(
-      `Bạn có chắc muốn ${newStatus === 'completed' ? 'hoàn thành' : 'hủy'} đơn hàng này?`,
-      'Xác nhận',
-      {
-        confirmButtonText: 'Đồng ý',
-        cancelButtonText: 'Hủy',
-        type: 'warning'
-      }
-    )
-
-    const updatedOrders = orders.value.map(o => {
-      if (o.id === order.id) {
-        return { ...o, status: newStatus }
-      }
-      return o
-    })
-
-    localStorage.setItem('orders', JSON.stringify(updatedOrders))
-    orders.value = updatedOrders
-    ElMessage.success('Cập nhật trạng thái đơn hàng thành công!')
-  } catch {
-    // User cancelled
-  }
+// Xử lý xác nhận đơn
+const handleApprove = (order) => {
+  ElMessageBox.confirm(
+    'Xác nhận đơn hàng này?',
+    'Xác nhận',
+    {
+      confirmButtonText: 'Xác nhận',
+      cancelButtonText: 'Hủy',
+      type: 'success'
+    }
+  ).then(() => {
+    const index = orders.value.findIndex(o => o.id === order.id)
+    if (index > -1) {
+      orders.value[index].status = 'confirmed'
+      localStorage.setItem('orders', JSON.stringify(orders.value))
+      ElMessage.success('Đã xác nhận đơn hàng!')
+    }
+  }).catch(() => {
+    ElMessage.info('Đã hủy thao tác')
+  })
 }
+
+// Xử lý đánh dấu đã thanh toán
+const handleMarkAsPaid = (order) => {
+  ElMessageBox.confirm(
+    'Xác nhận đơn hàng đã thanh toán?',
+    'Xác nhận',
+    {
+      confirmButtonText: 'Xác nhận',
+      cancelButtonText: 'Hủy',
+      type: 'success'
+    }
+  ).then(() => {
+    const index = orders.value.findIndex(o => o.id === order.id)
+    if (index > -1) {
+      orders.value[index].status = 'paid'
+      localStorage.setItem('orders', JSON.stringify(orders.value))
+      ElMessage.success('Đã cập nhật trạng thái thanh toán!')
+    }
+  }).catch(() => {
+    ElMessage.info('Đã hủy thao tác')
+  })
+}
+
+// Xử lý hủy đơn
+const handleCancel = (order) => {
+  ElMessageBox.confirm(
+    'Bạn có chắc chắn muốn hủy đơn hàng này?',
+    'Xác nhận',
+    {
+      confirmButtonText: 'Xác nhận',
+      cancelButtonText: 'Hủy',
+      type: 'warning'
+    }
+  ).then(() => {
+    const index = orders.value.findIndex(o => o.id === order.id)
+    if (index > -1) {
+      orders.value[index].status = 'cancelled'
+      localStorage.setItem('orders', JSON.stringify(orders.value))
+      ElMessage.success('Đã hủy đơn hàng!')
+    }
+  }).catch(() => {
+    ElMessage.info('Đã hủy thao tác')
+  })
+}
+
+onMounted(() => {
+  loading.value = true
+  // Load danh sách đơn hàng
+  orders.value = JSON.parse(localStorage.getItem('orders') || '[]')
+  loading.value = false
+})
 </script>
 
 <style scoped>
-.orders {
+.admin-orders {
   padding: 20px;
 }
 
-.header {
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
 }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
+.page-header h2 {
+  margin: 0;
+  color: #333;
 }
 
-.stat-card {
-  text-align: center;
+.order-item {
+  display: flex;
+  justify-content: space-between;
+  margin: 5px 0;
+  padding: 5px 0;
+  border-bottom: 1px solid #ebeef5;
 }
 
-.stat-header {
+.order-item:last-child {
+  border-bottom: none;
+}
+
+.order-details {
+  padding: 20px;
+}
+
+.detail-row {
+  display: flex;
+  margin-bottom: 15px;
+}
+
+.label {
+  font-weight: bold;
+  width: 120px;
+  color: #606266;
+}
+
+.value {
+  flex: 1;
+}
+
+.products-list {
+  margin: 20px 0;
+  padding: 15px;
+  background: #f5f7fa;
+  border-radius: 4px;
+}
+
+.product-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 10px 0;
+  padding: 10px;
+  background: white;
+  border-radius: 4px;
+}
+
+.product-info {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  gap: 10px;
 }
 
-.stat-value {
-  font-size: 24px;
+.product-image {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.product-details {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.product-name {
+  font-weight: bold;
+}
+
+.product-price {
+  color: #409EFF;
+}
+
+.product-quantity {
+  color: #606266;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 2px solid #ebeef5;
+}
+
+.total {
+  font-size: 1.2em;
   font-weight: bold;
   color: #409EFF;
 }
 
-.order-details {
-  margin-bottom: 20px;
-}
-
-.order-details p {
-  margin: 5px 0;
-}
-
-.order-total {
-  margin-top: 20px;
-  text-align: right;
-  font-size: 18px;
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 </style> 

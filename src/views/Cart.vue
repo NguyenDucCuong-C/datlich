@@ -59,7 +59,7 @@
           <span class="total-price">{{ formatPrice(total) }}</span>
         </div>
         <el-button type="primary" size="large" @click="checkout">
-          Thanh toán
+          Đặt hàng
         </el-button>
       </div>
     </div>
@@ -69,8 +69,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 
 const cartItems = ref([])
+const router = useRouter()
 
 onMounted(() => {
   // Đọc giỏ hàng từ localStorage khi component được mount
@@ -113,11 +115,42 @@ const removeItem = (item) => {
 }
 
 const checkout = () => {
-  // Xử lý thanh toán
-  ElMessage.success('Đặt hàng thành công!')
+  const user = JSON.parse(localStorage.getItem('user'))
+  if (!user) {
+    ElMessage.warning('Vui lòng đăng nhập để đặt hàng!')
+    router.push({
+      path: '/login',
+      query: { redirect: '/cart' }
+    })
+    return
+  }
+
+  // Tạo đơn hàng mới
+  const order = {
+    id: Date.now(),
+    userId: user.id,
+    customerName: user.name,
+    phone: user.phone,
+    address: user.address,
+    items: cartItems.value,
+    totalAmount: total.value,
+    orderDate: new Date().toISOString(),
+    status: 'pending',
+    notes: ''
+  }
+
+  // Lưu đơn hàng vào localStorage
+  const orders = JSON.parse(localStorage.getItem('orders') || '[]')
+  orders.push(order)
+  localStorage.setItem('orders', JSON.stringify(orders))
+
+  // Xóa giỏ hàng
   cartItems.value = []
-  // Xóa giỏ hàng trong localStorage
   localStorage.removeItem('cart')
+
+  ElMessage.success('Đặt hàng thành công!')
+  // Chuyển hướng đến trang đơn hàng
+  router.push('/orders')
 }
 </script>
 
